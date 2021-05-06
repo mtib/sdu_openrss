@@ -20,3 +20,5 @@ This is the example script periodically running on mtib.dev to update the feed:
     kill $CD
 )
 ```
+
+I also wrote [a blog article](https://blog.mtib.dev/sdu-vacancies-rss.html) about my reasoning and progress.
