@@ -16,3 +16,4 @@ html_parser = "0.6.2"
 chrono = "0.4.19"
 rss = "1.10.0"
 serde = { version = "1.0", features = ["derive"] }
+ellipse = "0.2.0"

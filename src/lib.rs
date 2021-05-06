@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 use std::hash::Hasher;
+#[allow(unused_imports)]
 use std::io::Write;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
@@ -30,6 +31,10 @@ pub async fn get_html() -> Result<String, failure::Error> {
 
     chrome_options.insert("args".to_string(), json!(["--headless"]));
 
+    if let Ok(bin) = std::env::var("CHROME_BINARY") {
+        chrome_options.insert("binary".to_string(), json!(bin));
+    }
+
     cap.insert(
         "goog:chromeOptions".to_string(),
         Value::Object(chrome_options),
@@ -39,9 +44,8 @@ pub async fn get_html() -> Result<String, failure::Error> {
         .capabilities(cap)
         .connect("http://localhost:9515")
         .await
-        .unwrap();
+        .map_err(|_| failure::format_err!("Connection to Chromedriver on Port 9515 failed"))?;
 
-    cl.set_window_size(1920, 8000).await?;
     cl.goto(OPEN_POSITIONS).await?;
 
     sleep(Duration::from_secs(5)).await;
@@ -97,13 +101,76 @@ impl TryFrom<&str> for Campus {
     }
 }
 
+#[derive(Debug, Hash)]
+pub enum Faculty {
+    Engineering,
+    HealthSciences,
+    BusinessAndSocialSciences,
+    Science,
+    Humanities,
+    CentralAdministration,
+    Library,
+}
+
+impl TryFrom<&str> for Faculty {
+    type Error = failure::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "Faculty of Engineering" => Ok(Faculty::Engineering),
+            "Faculty of Health Sciences" => Ok(Faculty::HealthSciences),
+            "Faculty of Business and Social Sciences" => Ok(Faculty::BusinessAndSocialSciences),
+            "Faculty of Science" => Ok(Faculty::Engineering),
+            "Faculty of Humanities" => Ok(Faculty::Engineering),
+            "Central Administration" => Ok(Faculty::Engineering),
+            "SDU Library" => Ok(Faculty::Library),
+            _ => bail!("Faculty not known: {}", value),
+        }
+    }
+}
+
+impl From<&Faculty> for String {
+    fn from(c: &Faculty) -> Self {
+        match c {
+            Faculty::Engineering => "Faculty of Engineering",
+            Faculty::HealthSciences => "Faculty of Health Sciences",
+            Faculty::BusinessAndSocialSciences => "Faculty of Business and Social Sciences",
+            Faculty::Science => "Faculty of Science",
+            Faculty::Humanities => "Faculty of Humanities",
+            Faculty::CentralAdministration => "Central Administration",
+            Faculty::Library => "SDU Library",
+        }
+        .to_owned()
+    }
+}
+
+impl Display for Faculty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", String::from(self))
+    }
+}
+
+impl Faculty {
+    pub fn to_short_name(&self) -> &str {
+        match self {
+            Faculty::Engineering => "Engineering",
+            Faculty::HealthSciences => "Health",
+            Faculty::BusinessAndSocialSciences => "Business",
+            Faculty::Science => "Science",
+            Faculty::Humanities => "Humanities",
+            Faculty::CentralAdministration => "Administration",
+            Faculty::Library => "Library",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Position {
     pub link: String,
     pub title: String,
     pub campus: Campus,
     pub deadline: NaiveDate,
-    pub faculty: String,
+    pub faculty: Faculty,
     pub first_seen: Option<DateTime<FixedOffset>>,
 }
 
@@ -189,7 +256,7 @@ impl TryFrom<&Element> for Position {
                 }
             },
             title,
-            faculty,
+            faculty: Faculty::try_from(faculty.as_str())?,
             campus,
             deadline,
             first_seen: None,
@@ -200,13 +267,14 @@ impl TryFrom<&Element> for Position {
 impl From<&Position> for Item {
     fn from(p: &Position) -> Self {
         //let dt = chrono::Utc.from_utc_datetime(&p.deadline.and_hms(0, 0, 0));
-
+        use ellipse::Ellipse;
         Item {
             title: Some(format!(
-                "{}: {} {}",
+                "{}/{} {}: {}",
+                p.faculty.to_short_name(),
                 String::from(&p.campus),
-                p.faculty,
-                p.deadline
+                p.deadline,
+                p.title.as_str().truncate_ellipse(80)
             )),
             link: Some(p.link.clone()),
             description: Some(p.title.clone()),
