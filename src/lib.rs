@@ -120,9 +120,9 @@ impl TryFrom<&str> for Faculty {
             "Faculty of Engineering" => Ok(Faculty::Engineering),
             "Faculty of Health Sciences" => Ok(Faculty::HealthSciences),
             "Faculty of Business and Social Sciences" => Ok(Faculty::BusinessAndSocialSciences),
-            "Faculty of Science" => Ok(Faculty::Engineering),
-            "Faculty of Humanities" => Ok(Faculty::Engineering),
-            "Central Administration" => Ok(Faculty::Engineering),
+            "Faculty of Science" => Ok(Faculty::Science),
+            "Faculty of Humanities" => Ok(Faculty::Humanities),
+            "Central Administration" => Ok(Faculty::CentralAdministration),
             "SDU Library" => Ok(Faculty::Library),
             _ => bail!("Faculty not known: {}", value),
         }
