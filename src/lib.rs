@@ -15,6 +15,7 @@ use chrono::{DateTime, FixedOffset, Local, NaiveDate};
 use failure::bail;
 use fantoccini::{ClientBuilder, Locator};
 use html_parser::{Dom, Element, Node};
+use regex::Regex;
 use rss::{Guid, Item, Source};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -44,7 +45,9 @@ pub async fn get_html() -> Result<String, failure::Error> {
         .capabilities(cap)
         .connect("http://localhost:9515")
         .await
-        .map_err(|_| failure::format_err!("Connection to Chromedriver on Port 9515 failed"))?;
+        .map_err(|e| {
+            failure::format_err!("Connection to Chromedriver on Port 9515 failed: {}", e)
+        })?;
 
     cl.goto(OPEN_POSITIONS).await?;
 
@@ -239,8 +242,23 @@ impl TryFrom<&Element> for Position {
         };
 
         let deadline = if let Node::Element(td4) = &element.children[3] {
-            if let Some(Node::Text(t)) = td4.children.get(0) {
-                NaiveDate::parse_from_str(t.as_str(), DEADLINE_FORMAT).unwrap()
+            if let Some(Node::Text(mut t)) = td4.children.get(0).cloned() {
+                let re = Regex::new(r"(\d+)-(\w+)-(\d+)").unwrap();
+                if let Some(c) = re.captures(&t) {
+                    t = format!(
+                        "{}-{}-{}",
+                        &c.get(1).unwrap().as_str(),
+                        &c.get(2).unwrap().as_str()[0..3],
+                        &c.get(3).unwrap().as_str(),
+                    );
+                    //eprintln!("{}", t);
+                }
+                if let Ok(d) = NaiveDate::parse_from_str(t.as_str(), DEADLINE_FORMAT) {
+                    d
+                } else {
+                    eprintln!("Date parse error: {}", t);
+                    bail!("Encountered unparsable date: {}", t);
+                }
             } else {
                 bail!("Unexpected inner structure: {:?}", td4);
             }
